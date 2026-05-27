@@ -1,0 +1,43 @@
+import { Stage, Layer, Rect } from 'react-konva';
+import { useStudioStore } from '../../store/useStudioStore';
+import { WORKSPACE_CONFIG } from '../../config/workspace';
+import { ArtistPaintSurface } from './ArtistPaintSurface';
+import { RasterPaintSurface } from './RasterPaintSurface';
+
+export const PaintingStage = () => {
+  const { workspace, konvaLayers, canvasSettings, tools } = useStudioStore();
+  
+  if (workspace !== 'PAINTING') return null;
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
+      <Stage 
+        id="konva-stage" 
+        width={WORKSPACE_CONFIG.logicalWidth} 
+        height={WORKSPACE_CONFIG.logicalHeight}
+      >
+        {canvasSettings.showGrid && (
+          <Layer listening={false}>
+            <Rect 
+              width={WORKSPACE_CONFIG.logicalWidth} 
+              height={WORKSPACE_CONFIG.logicalHeight} 
+              stroke="rgba(255,255,255,0.1)" 
+              dash={[10, 10]}
+            />
+          </Layer>
+        )}
+        
+        {konvaLayers.map((layer) => (
+          <Layer key={layer.id} visible={layer.visible} opacity={layer.opacity}>
+             {/* Removed layerId from RasterPaintSurface */}
+             {tools.renderMode === 'RASTER' ? (
+               <RasterPaintSurface /> 
+             ) : (
+               <ArtistPaintSurface layerId={layer.id} lines={layer.lines} />
+             )}
+          </Layer>
+        ))}
+      </Stage>
+    </div>
+  );
+};
