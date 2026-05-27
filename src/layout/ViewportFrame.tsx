@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { WORKSPACE_CONFIG } from '../config/workspace';
+import { useStudioStore } from '../store/useStudioStore';
 
 interface ViewportFrameProps {
   children: React.ReactNode;
@@ -8,15 +8,16 @@ interface ViewportFrameProps {
 export const ViewportFrame: React.FC<ViewportFrameProps> = ({ children }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const { width, height } = useStudioStore((state) => state.canvasSettings);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const calculateScale = (width: number, height: number) => {
-      // Calculate how much we need to scale down the 1920x1080 box to fit the screen
-      const scaleX = width / WORKSPACE_CONFIG.logicalWidth;
-      const scaleY = height / WORKSPACE_CONFIG.logicalHeight;
+    const calculateScale = (clientWidth: number, clientHeight: number) => {
+      // Scale based on the dynamic store dimensions
+      const scaleX = clientWidth / width;
+      const scaleY = clientHeight / height;
       // 0.95 gives us a clean 5% padding around the canvas
       setScale(Math.min(scaleX, scaleY) * 0.95); 
     };
@@ -29,7 +30,7 @@ export const ViewportFrame: React.FC<ViewportFrameProps> = ({ children }) => {
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [width, height]); // Re-run if custom dimensions change
 
   return (
     <div 
@@ -48,14 +49,14 @@ export const ViewportFrame: React.FC<ViewportFrameProps> = ({ children }) => {
     >
       <div
         style={{
-          width: WORKSPACE_CONFIG.logicalWidth,
-          height: WORKSPACE_CONFIG.logicalHeight,
+          width: width,
+          height: height,
           position: 'relative',
           transform: `scale(${scale})`,
           transformOrigin: 'center center',
           boxShadow: '0 0 40px rgba(0,0,0,0.8)',
           backgroundColor: '#111', // Dark background specifically for the canvas area
-          overflow: 'hidden', // Prevents 3D meshes or 2D lines from bleeding outside the 16:9 box
+          overflow: 'hidden', // Prevents 3D meshes or 2D lines from bleeding outside the frame
         }}
       >
         {children}

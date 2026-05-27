@@ -1,4 +1,4 @@
-import { useRef } from 'react'; // Removed the unused useEffect import
+import { useRef } from 'react';
 import { TransformControls, Edges } from '@react-three/drei';
 import { useStudioStore, type SceneNode } from '../../store/useStudioStore';
 
@@ -10,12 +10,10 @@ interface BlockoutNodeProps {
 export const BlockoutNode = ({ node, isModeling }: BlockoutNodeProps) => {
   const meshRef = useRef<any>(null);
   const selectedNodeId = useStudioStore((state) => state.threeState.selectedNodeId);
-  const setSelectedNode = useStudioStore((state) => state.setSelectedNode);
-  const updateNode = useStudioStore((state) => state.updateNode);
+  const { updateNode, setSelectedNode } = useStudioStore();
 
   const isSelected = selectedNodeId === node.id && isModeling;
 
-  // Sync transform changes back to Zustand on drag end
   const handleTransformChange = () => {
     if (meshRef.current) {
       updateNode(node.id, {
@@ -26,37 +24,41 @@ export const BlockoutNode = ({ node, isModeling }: BlockoutNodeProps) => {
     }
   };
 
-  const MeshGeometry = () => (
-    <mesh
-      ref={meshRef}
-      position={node.position}
-      rotation={node.rotation}
-      scale={node.scale}
-      onClick={(e) => {
-        if (isModeling) {
-          e.stopPropagation(); // Prevent click from bubbling to scene background
-          setSelectedNode(node.id);
-        }
-      }}
-    >
-      {node.type === 'cube' ? <boxGeometry args={[1, 1, 1]} /> : <sphereGeometry args={[0.5, 32, 16]} />}
-      <meshStandardMaterial color={isSelected ? "#66aaff" : "#555"} wireframe={!isModeling} />
+  // Factory for expanded mesh types
+  const renderGeometry = () => {
+    switch (node.type) {
+      case 'cube': return <boxGeometry args={[1, 1, 1]} />;
+      case 'sphere': return <sphereGeometry args={[0.5, 32, 16]} />;
+      case 'cylinder': return <cylinderGeometry args={[0.5, 0.5, 1, 32]} />;
+      case 'cone': return <coneGeometry args={[0.5, 1, 32]} />;
+      case 'plane': return <planeGeometry args={[1, 1]} />;
+      default: return <boxGeometry args={[1, 1, 1]} />;
+    }
+  };
+
+  return (
+    <>
+      {isSelected && meshRef.current && (
+        <TransformControls object={meshRef.current} mode="translate" onMouseUp={handleTransformChange} />
+      )}
       
-      {/* Add subtle outlines for better visibility against backgrounds */}
-      {isModeling && <Edges scale={1.05} threshold={15} color={isSelected ? "cyan" : "black"} />}
-    </mesh>
-  );
-
-  if (isSelected) {
-    return (
-      <TransformControls 
-        mode="translate"
-        onMouseUp={handleTransformChange}
+      <mesh
+        ref={meshRef}
+        position={node.position}
+        rotation={node.rotation}
+        scale={node.scale}
+        onClick={(e) => {
+          if (isModeling) {
+            e.stopPropagation();
+            setSelectedNode(node.id);
+          }
+        }}
       >
-        <MeshGeometry />
-      </TransformControls>
-    );
-  }
-
-  return <MeshGeometry />;
+        {renderGeometry()}
+        {/* ADDED: Dynamic Mesh Colorization */}
+        <meshStandardMaterial color={isSelected ? "#66aaff" : node.color} wireframe={!isModeling} roughness={0.7} metalness={0.2} />
+        {isModeling && <Edges scale={1.05} threshold={15} color={isSelected ? "cyan" : "black"} />}
+      </mesh>
+    </>
+  );
 };

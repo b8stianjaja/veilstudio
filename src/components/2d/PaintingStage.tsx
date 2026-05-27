@@ -1,6 +1,5 @@
 import { Stage, Layer, Rect } from 'react-konva';
 import { useStudioStore } from '../../store/useStudioStore';
-import { WORKSPACE_CONFIG } from '../../config/workspace';
 import { ArtistPaintSurface } from './ArtistPaintSurface';
 import { RasterPaintSurface } from './RasterPaintSurface';
 
@@ -13,14 +12,14 @@ export const PaintingStage = () => {
     <div style={{ position: 'absolute', inset: 0, zIndex: 2 }}>
       <Stage 
         id="konva-stage" 
-        width={WORKSPACE_CONFIG.logicalWidth} 
-        height={WORKSPACE_CONFIG.logicalHeight}
+        width={canvasSettings.width} 
+        height={canvasSettings.height}
       >
         {canvasSettings.showGrid && (
           <Layer listening={false}>
             <Rect 
-              width={WORKSPACE_CONFIG.logicalWidth} 
-              height={WORKSPACE_CONFIG.logicalHeight} 
+              width={canvasSettings.width} 
+              height={canvasSettings.height} 
               stroke="rgba(255,255,255,0.1)" 
               dash={[10, 10]}
             />

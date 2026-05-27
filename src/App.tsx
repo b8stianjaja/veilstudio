@@ -1,12 +1,31 @@
-import { useStudioStore } from './store/useStudioStore';
+import { useState } from 'react';
+import { useStudioStore, type NodeType } from './store/useStudioStore';
 import { ViewportFrame } from './layout/ViewportFrame';
 import { ReferenceScene } from './components/3d/ReferenceScene';
 import { PaintingStage } from './components/2d/PaintingStage';
 import { exportCleanArtwork, exportProjectJSON } from './utils/exportPipelines';
-import './App.css'; // We will move styling here for a cleaner component
+import './App.css';
 
 export default function StudioAppContainer() {
   const store = useStudioStore(); 
+  const [newViewName, setNewViewName] = useState('');
+
+  const { threeState, canvasSettings } = store;
+  const { lights, selectedNodeId, nodes, savedViews } = threeState;
+  const selectedNode = nodes.find(n => n.id === selectedNodeId);
+
+  const handleSaveView = () => {
+    if (!newViewName.trim()) return;
+    const cameraData = (window as any).__getCurrentCameraData?.();
+    if (cameraData) {
+      store.saveCurrentView(newViewName, cameraData);
+      setNewViewName('');
+    }
+  };
+
+  const handleLoadView = (view: any) => {
+    (window as any).__loadCameraView?.(view.position, view.target, view.zoom);
+  };
 
   return (
     <div className="studio-app">
@@ -46,45 +65,81 @@ export default function StudioAppContainer() {
         </header>
 
         <div className="inspector-content">
-          {/* 3D TOOLS */}
+          
+          <section className="panel-section">
+            <h3>Dimensions</h3>
+            <div className="button-row">
+              <input type="number" className="small-input" value={canvasSettings.width} onChange={(e) => store.setDimensions(Number(e.target.value), canvasSettings.height)} />
+              <span>x</span>
+              <input type="number" className="small-input" value={canvasSettings.height} onChange={(e) => store.setDimensions(canvasSettings.width, Number(e.target.value))} />
+            </div>
+          </section>
+
           {store.workspace === 'MODELING' && (
-            <section className="panel-section">
-              <h3>Scene Geometry</h3>
-              <div className="button-row">
-                <button className="secondary-btn" onClick={() => store.addNode('cube')}>+ Cube</button>
-                <button className="secondary-btn" onClick={() => store.addNode('sphere')}>+ Sphere</button>
-              </div>
-              
-              {store.threeState.selectedNodeId && (
-                <div className="active-item-card">
-                  <p>Selected: <strong>{store.threeState.selectedNodeId}</strong></p>
-                  <button className="danger-btn" onClick={() => store.removeNode(store.threeState.selectedNodeId!)}>Delete Mesh</button>
+            <>
+              {/* --- CUSTOM CAMERA VIEWS --- */}
+              <section className="panel-section">
+                <h3>Saved Camera Views</h3>
+                <div className="button-row">
+                  <input type="text" placeholder="View name..." value={newViewName} onChange={e => setNewViewName(e.target.value)} />
+                  <button className="secondary-btn" onClick={handleSaveView}>Save</button>
                 </div>
+                {savedViews.length > 0 && (
+                  <ul className="view-list" style={{ listStyle: 'none', padding: 0, marginTop: 10 }}>
+                    {savedViews.map(view => (
+                      <li key={view.id} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                        <button className="text-btn" onClick={() => handleLoadView(view)}>{view.name}</button>
+                        <button className="danger-btn small" onClick={() => store.deleteSavedView(view.id)}>X</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
+              {/* Advanced Lighting System */}
+              <section className="panel-section">
+                <h3>Environment Lighting</h3>
+                <div className="button-row">
+                  <label>Ambient <input type="color" value={lights.ambientColor} onChange={e => store.updateLights({ ambientColor: e.target.value })} /></label>
+                  <label>Sun <input type="color" value={lights.dirColor} onChange={e => store.updateLights({ dirColor: e.target.value })} /></label>
+                </div>
+              </section>
+
+              <section className="panel-section">
+                <h3>Add Geometry</h3>
+                <div className="button-row" style={{ flexWrap: 'wrap' }}>
+                  {['cube', 'sphere', 'cylinder', 'cone', 'plane'].map(type => (
+                    <button key={type} className="secondary-btn" onClick={() => store.addNode(type as NodeType)}>+ {type}</button>
+                  ))}
+                </div>
+              </section>
+              
+              {selectedNode && (
+                <section className="panel-section active-item-card">
+                  <h3>Selected: {selectedNode.type}</h3>
+                  <label>Color: <input type="color" value={selectedNode.color} onChange={e => store.updateNode(selectedNode.id, { color: e.target.value })} /></label>
+                  <div className="button-row">
+                    <button className="secondary-btn" onClick={() => store.duplicateNode(selectedNode.id)}>Duplicate</button>
+                    <button className="danger-btn" onClick={() => store.removeNode(selectedNode.id)}>Delete</button>
+                  </div>
+                </section>
               )}
-            </section>
+            </>
           )}
 
-          {/* 2D TOOLS */}
           {store.workspace === 'PAINTING' && (
             <>
               <section className="panel-section">
                 <h3>Engine Rendering</h3>
-                <button 
-                  className="secondary-btn full-width"
-                  onClick={() => store.setRenderMode(store.tools.renderMode === 'RASTER' ? 'VECTOR' : 'RASTER')}
-                >
+                <button className="secondary-btn full-width" onClick={() => store.setRenderMode(store.tools.renderMode === 'RASTER' ? 'VECTOR' : 'RASTER')}>
                   Mode: {store.tools.renderMode}
                 </button>
-                <p className="helper-text">
-                  {store.tools.renderMode === 'RASTER' ? 'O(1) memory cost. Best for sketching.' : 'Editable math paths. Best for precision.'}
-                </p>
               </section>
 
               <section className="panel-section">
-                <h3>Canvas View</h3>
                 <label className="checkbox-label">
                   <input type="checkbox" checked={store.canvasSettings.showGrid} onChange={store.toggleGrid} />
-                  Show Perspective Grid
+                  Show Alignment Grid
                 </label>
               </section>
             </>

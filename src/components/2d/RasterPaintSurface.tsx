@@ -1,17 +1,26 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef } from 'react';
 import { Image as KonvaImage } from 'react-konva';
-import { WORKSPACE_CONFIG } from '../../config/workspace';
+import { useStudioStore } from '../../store/useStudioStore';
 
 export const RasterPaintSurface = () => {
   const imageRef = useRef<any>(null);
   const isDrawing = useRef(false);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
+  
+  // OPTIMIZATION: Strict selectors. We only subscribe to width and height.
+  // The component will no longer re-render if 3D nodes or Workspace Modes change.
+  const width = useStudioStore((state) => state.canvasSettings.width);
+  const height = useStudioStore((state) => state.canvasSettings.height);
 
-  // useMemo ensures we only create this memory-heavy canvas exactly once per mount
-  const canvas = useMemo(() => {
+  // PERSISTENCE: We use a ref to hold the canvas element permanently. 
+  // It survives re-renders and React lifecycle changes.
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Initialize the canvas only once
+  if (!canvasRef.current) {
     const cvs = document.createElement('canvas');
-    cvs.width = WORKSPACE_CONFIG.logicalWidth;
-    cvs.height = WORKSPACE_CONFIG.logicalHeight;
+    cvs.width = width;
+    cvs.height = height;
     const ctx = cvs.getContext('2d');
     if (ctx) {
       ctx.lineCap = 'round';
@@ -19,16 +28,41 @@ export const RasterPaintSurface = () => {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 4;
     }
-    return cvs;
-  }, []);
+    canvasRef.current = cvs;
+  }
 
-  // Cleanup to prevent memory leaks on unmount
+  // SURGICAL FIX: The Resize & Rescue Operation
   useEffect(() => {
-    return () => {
-      canvas.width = 0;
-      canvas.height = 0;
-    };
-  }, [canvas]);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Skip if dimensions haven't actually changed
+    if (canvas.width === width && canvas.height === height) return;
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
+
+    // 1. Snapshot the existing artwork before the canvas resizes
+    const snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // 2. Apply new dimensions (Warning: This natively wipes the HTML5 Canvas)
+    canvas.width = width;
+    canvas.height = height;
+
+    // 3. Re-apply context settings because resizing clears them
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+
+    // 4. Restore the artwork perfectly in the top-left corner
+    ctx.putImageData(snapshot, 0, 0);
+
+    // 5. Force Konva to flush the updated buffer to the screen
+    if (imageRef.current) {
+      imageRef.current.getLayer()?.batchDraw();
+    }
+  }, [width, height]); // Only runs when dimensions change
 
   const handleMouseDown = (e: any) => {
     isDrawing.current = true;
@@ -40,6 +74,9 @@ export const RasterPaintSurface = () => {
     
     const stage = e.target.getStage();
     const pos = stage.getPointerPosition();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
     const ctx = canvas.getContext('2d');
 
     if (ctx && pos) {
@@ -50,7 +87,6 @@ export const RasterPaintSurface = () => {
       
       lastPos.current = pos;
       
-      // Highly optimized Konva redraw
       if (imageRef.current) {
         imageRef.current.getLayer().batchDraw();
       }
@@ -65,16 +101,16 @@ export const RasterPaintSurface = () => {
   return (
     <KonvaImage
       ref={imageRef}
-      image={canvas}
+      image={canvasRef.current || undefined}
       x={0}
       y={0}
-      width={WORKSPACE_CONFIG.logicalWidth}
-      height={WORKSPACE_CONFIG.logicalHeight}
+      width={width}
+      height={height}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      listening={true} // Forces Konva to catch events even if pixel is transparent
+      listening={true}
     />
   );
 };

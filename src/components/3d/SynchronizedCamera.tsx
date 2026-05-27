@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -7,34 +7,32 @@ import { useStudioStore } from '../../store/useStudioStore';
 export const SynchronizedCamera: React.FC = () => {
   const { camera } = useThree();
   const controlsRef = useRef<OrbitControlsImpl>(null);
-  
   const workspace = useStudioStore((state) => state.workspace);
-  const activeCamera = useStudioStore((state) => state.threeState.activeCamera);
-  const saveCameraPreset = useStudioStore((state) => state.saveCameraPreset);
 
-  // Capture camera matrix when switching out of MODELING
-  useEffect(() => {
-    if (workspace === 'PAINTING' && controlsRef.current) {
-      const target = controlsRef.current.target;
-      saveCameraPreset({
-        position: [camera.position.x, camera.position.y, camera.position.z],
-        target: [target.x, target.y, target.z],
-        fov: (camera as any).fov || 45,
-        zoom: camera.zoom || 1
-      });
-    }
-  }, [workspace, camera, saveCameraPreset]);
-
-  // Lock camera to preset when in PAINTING mode
-  useEffect(() => {
-    if (workspace === 'PAINTING' && activeCamera) {
-      camera.position.set(...activeCamera.position);
-      (camera as any).fov = activeCamera.fov;
-      camera.zoom = activeCamera.zoom;
-      camera.lookAt(...activeCamera.target);
+  // We expose a global method to the window so the UI panel can trigger a camera jump
+  // This avoids passing complex Three.js objects into Zustand state.
+  React.useEffect(() => {
+    (window as any).__loadCameraView = (position: number[], target: number[], zoom: number) => {
+      camera.position.set(position[0], position[1], position[2]);
+      camera.zoom = zoom;
+      if (controlsRef.current) {
+        controlsRef.current.target.set(target[0], target[1], target[2]);
+      } else {
+        camera.lookAt(target[0], target[1], target[2]);
+      }
       camera.updateProjectionMatrix();
-    }
-  }, [workspace, activeCamera, camera]);
+    };
 
+    (window as any).__getCurrentCameraData = () => {
+      return {
+        position: [camera.position.x, camera.position.y, camera.position.z],
+        target: controlsRef.current ? [controlsRef.current.target.x, controlsRef.current.target.y, controlsRef.current.target.z] : [0,0,0],
+        zoom: camera.zoom
+      };
+    };
+  }, [camera]);
+
+  // OrbitControls are active ONLY in modeling mode. 
+  // In painting mode, the camera naturally locks exactly where it was left.
   return workspace === 'MODELING' ? <OrbitControls ref={controlsRef} makeDefault /> : null;
 };
